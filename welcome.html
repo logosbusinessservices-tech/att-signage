@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<!--
+  RVNL welcome slide + announcements board (digital signage).
+
+  Self-contained: no internet, no fonts to download. It alternates between
+  two slides:
+    - the welcome slide (RVNL logo under "Welcome to") for 10 seconds, and
+    - the "Announcements" board for 10 seconds,
+  The board lists the messages Executive Assistants manage on the website.
+  sync_messages.py keeps them in messages.js next to this file. With no
+  messages (or before the first sync) only the welcome slide is shown.
+
+  COLOURS: taken straight from the logo (logor.svg) so everything matches —
+    #25201C charcoal | #A01A16 red | #ADCA0D green | #FFFFFF white.
+
+  TO CHANGE THINGS:
+    - Swap the logo: replace logor.svg in this folder (keep the same name).
+    - Change the welcome wording: edit the SLIDES list further down.
+    - Change slide durations: WELCOME_SECONDS / BOARD_SECONDS further down.
+    - Re-theme: edit the --rvnl-* colour variables in the :root block.
+  Save the file, then refresh the monitor with F5 (or it picks it up on the
+  next start).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RVNL</title>
+  <style>
+    :root {
+      /* Colours pulled directly from the logo SVG. */
+      --rvnl-charcoal: #25201C;
+      --rvnl-red:      #A01A16;
+      --rvnl-green:    #ADCA0D;
+      --rvnl-white:    #ffffff;
+      /* Soft off-white page so the logo's white parts still read cleanly. */
+      --rvnl-bg:       #f7f7f4;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      cursor: none;                 /* hide the mouse pointer on the wall screen */
+      background: var(--rvnl-bg);
+      font-family: "Segoe UI", "Ubuntu", Arial, sans-serif;
+    }
+
+    .stage {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(120vw 90vh at 50% -20%,
+                        #ffffff 0%, var(--rvnl-bg) 60%, #eceae4 100%);
+    }
+
+    /* Thin brand ribbon across the very top: red -> green. */
+    .stage::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 12px;
+      background: linear-gradient(90deg,
+                  var(--rvnl-red) 0%,
+                  var(--rvnl-red) 50%,
+                  var(--rvnl-green) 50%,
+                  var(--rvnl-green) 100%);
+    }
+
+    .card {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      padding: 4vh 6vw;
+      max-width: 92vw;
+    }
+
+    .welcome {
+      font-size: clamp(28px, 5vw, 84px);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--rvnl-charcoal);
+      margin-bottom: 3vh;
+    }
+
+    /* The logo itself, scaled to the screen. */
+    .logo {
+      width: min(70vw, 900px);
+      height: auto;
+      display: block;
+      margin: 0 auto;
+      filter: drop-shadow(0 8px 24px rgba(37, 32, 28, 0.18));
+    }
+
+    /* The green/red underline bar beneath the logo. */
+    .rule {
+      width: min(50vw, 520px);
+      height: 6px;
+      margin: 4vh auto 3vh;
+      border-radius: 6px;
+      background: linear-gradient(90deg,
+                  transparent, var(--rvnl-green), var(--rvnl-red), transparent);
+    }
+
+    .message {
+      font-size: clamp(20px, 3.4vw, 52px);
+      font-weight: 400;
+      color: var(--rvnl-charcoal);
+      opacity: 0.85;
+      min-height: 1.3em;                 /* stops layout jumping between slides */
+      transition: opacity 0.6s ease;
+    }
+    .message.fade { opacity: 0; }
+
+    /* Footer strip. */
+    .footer {
+      position: absolute;
+      bottom: 3vh;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: clamp(13px, 1.5vw, 22px);
+      color: rgba(37, 32, 28, 0.55);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      z-index: 2;
+    }
+    #clock { font-variant-numeric: tabular-nums; }
+
+    /* ── The two slides, cross-faded ── */
+    .view {
+      position: absolute;
+      inset: 12px 0 0 0;               /* just below the brand ribbon */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.8s ease, visibility 0.8s;
+    }
+    .view.active { opacity: 1; visibility: visible; }
+
+    /* ── Announcements board ── */
+    .board {
+      justify-content: flex-start;
+      align-items: stretch;
+      padding: 5vh 7vw 11vh;           /* bottom space keeps clear of the footer */
+    }
+    .board-head {
+      display: flex;
+      align-items: center;
+      gap: 2.5vw;
+      margin-bottom: 4vh;
+    }
+    .board-logo { height: clamp(48px, 9vh, 120px); width: auto; }
+    .board-title {
+      font-size: clamp(32px, 4.5vw, 92px);
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: var(--rvnl-charcoal);
+    }
+    .board-list {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55em;
+      font-size: 40px;                 /* fitted to the screen by fitBoard() */
+    }
+    .board-list li {
+      background: var(--rvnl-white);
+      border-left: 0.3em solid var(--rvnl-red);
+      border-radius: 0.3em;
+      padding: 0.45em 0.8em;
+      line-height: 1.3;
+      color: var(--rvnl-charcoal);
+      box-shadow: 0 4px 14px rgba(37, 32, 28, 0.08);
+      overflow-wrap: anywhere;
+    }
+    .board-list li:nth-child(even) { border-left-color: var(--rvnl-green); }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <section class="view active" id="welcome-view">
+      <div class="card">
+        <div class="welcome">Welcome to</div>
+        <img class="logo" src="logor.svg" alt="RVNL logo" />
+        <div class="rule"></div>
+        <div class="message" id="message"></div>
+      </div>
+    </section>
+    <section class="view board" id="board-view">
+      <header class="board-head">
+        <img class="board-logo" src="logor.svg" alt="" />
+        <h1 class="board-title">Announcements</h1>
+      </header>
+      <ol class="board-list" id="board-list"></ol>
+    </section>
+    <div class="footer">
+      Rail Vikas Nigam Limited &nbsp;&bull;&nbsp; <span id="clock"></span>
+    </div>
+  </div>
+
+  <script>
+    // ── The rotating messages. Add, remove or edit lines freely. ──────────────
+    const SLIDES = [
+      "A Government of India Enterprise",
+      "Building the railways of tomorrow",
+      "Safety • Quality • Commitment",
+      "Smart infrastructure, powered by innovation",
+    ];
+    const SLIDE_SECONDS = 6;   // how long each message stays on screen
+
+    // ── Cross-fade through the messages, looping forever. ─────────────────────
+    const el = document.getElementById("message");
+    let i = 0;
+    function showSlide() {
+      el.classList.add("fade");
+      setTimeout(() => {
+        el.textContent = SLIDES[i];
+        el.classList.remove("fade");
+        i = (i + 1) % SLIDES.length;
+      }, 600);
+    }
+    showSlide();
+    setInterval(showSlide, SLIDE_SECONDS * 1000);
+
+    // ── Live clock in the footer. ─────────────────────────────────────────────
+    function tick() {
+      const now = new Date();
+      document.getElementById("clock").textContent =
+        now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    tick();
+    setInterval(tick, 1000);
+
+    // ── Alternate the welcome slide and the announcements board. ──────────────────
+    const WELCOME_SECONDS = 10;
+    const BOARD_SECONDS = 10;
+    const MAX_MESSAGES = 8;
+
+    // Pages opened from a file can't fetch() other files, but they can load a
+    // script; sync_messages.py writes the list as window.RVNL_MESSAGES.
+    function loadMessages() {
+      return new Promise((resolve) => {
+        const script = document.createElement("script");
+        script.src = "messages.js?t=" + Date.now();
+        script.onload = script.onerror = () => { script.remove(); resolve(); };
+        document.head.appendChild(script);
+      });
+    }
+
+    function currentMessages() {
+      const data = window.RVNL_MESSAGES;
+      if (!data || !Array.isArray(data.messages)) return [];
+      return data.messages
+        .filter((t) => typeof t === "string" && t.trim())
+        .slice(0, MAX_MESSAGES);
+    }
+
+    const boardList = document.getElementById("board-list");
+
+    // Largest text size at which every message fits on screen.
+    function fitBoard() {
+      const minSize = 14;
+      let size = Math.max(minSize, Math.min(window.innerWidth * 0.032, 64));
+      boardList.style.fontSize = size + "px";
+      while (boardList.scrollHeight > boardList.clientHeight && size > minSize) {
+        size = Math.max(minSize, size * 0.92);
+        boardList.style.fontSize = size + "px";
+      }
+    }
+
+    function renderBoard(messages) {
+      // textContent, never innerHTML: messages are shown exactly as typed.
+      boardList.replaceChildren(...messages.map((text) => {
+        const item = document.createElement("li");
+        item.textContent = text;
+        return item;
+      }));
+      fitBoard();
+    }
+
+    function show(id) {
+      for (const view of document.querySelectorAll(".view")) {
+        view.classList.toggle("active", view.id === id);
+      }
+    }
+
+    async function cycle() {
+      show("welcome-view");
+      await loadMessages();
+      setTimeout(() => {
+        const messages = currentMessages();
+        if (messages.length === 0) {
+          cycle();
+          return;
+        }
+        renderBoard(messages);
+        show("board-view");
+        setTimeout(cycle, BOARD_SECONDS * 1000);
+      }, WELCOME_SECONDS * 1000);
+    }
+    cycle();
+  </script>
+</body>
+</html>
